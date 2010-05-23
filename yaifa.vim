@@ -1,6 +1,6 @@
 " YAIFA: Yet Another Indent Finder, Almost...
-" Version: 1.0
-" Modified: 2010-05-20
+" Version: 1.1
+" Modified: 2010-05-23
 " Author: Israel Chauca F. <israelchauca@gmail.com>
 "
 " This plug-in will try to detect the kind of indentation in your file and set
@@ -12,6 +12,8 @@
 "
 " 3.- Mixed: A combination of tabs and space is used. e.g.: a tab stands for 8
 "     spaces, but each indentation level is 4 spaces.
+"
+" Use :YAIFAMagic to manually set the options for the current file.
 "
 " You can set three options to customize the default values when the file's
 " indentation can't be determined:
@@ -40,52 +42,52 @@ endif
 
 let g:loaded_yaifa = 1
 
-function! YAIFA(cmdln)
+" Depending on your system and file size, scanning too many lines can be
+" painfully slow.
+if exists('g:yaifa_max_lines')
+	let s:max_lines = g:yaifa_max_lines
+else
+	let s:max_lines = 1024*16
+endif
 
-	" Depending on your system and file size, scanning too many lines can be
-	" painfully slow.
-	if exists('g:yaifa_max_lines')
-		let s:max_lines = g:yaifa_max_lines
-	else
-		let s:max_lines = 1024
-	endif
+if exists('g:yaifa_indentation')
+	let s:default_indent = g:yaifa_indentation == 0 ? "tab" :
+				\ g:yaifa_indentation == 1 ? "space" :
+				\ g:yaifa_indentation == 2 ? "mixed" :
+				\ "space"
+else
+	let s:default_indent = 'space'
+endif
 
-	if exists('g:yaifa_indentation')
-		let s:default_indent = g:yaifa_indentation == 0 ? "tab" :
-					\ g:yaifa_indentation == 1 ? "space" :
-					\ g:yaifa_indentation == 2 ? "mixed" :
-					\ "space"
-	else
-		let s:default_indent = 'space'
-	endif
+if exists('g:yaifa_tab_width')
+	let s:default_tab_width = g:yaifa_tab_width
+else
+	let s:default_tab_width = 4
+endif
 
-	if exists('g:yaifa_tab_width')
-		let s:default_tab_width = g:yaifa_tab_width
-	else
-		let s:default_tab_width = 4
-	endif
+let s:verbose_quiet = 0
+let s:verbose_info  = 1
+let s:verbose_debug = 2
+let s:verbose_deep  = 3
+if exists('g:yaifa_verbosity')
+	let s:verbosity = g:yaifa_verbosity
+else
+	let s:default_verbosity = s:verbose_quiet
+	let s:verbosity = s:default_verbosity
+endif
 
-	if exists('g:yaifa_verbosity')
-		let s:verbosity = g:yaifa_verbosity
-	else
-		let s:verbose_quiet = 0
-		let s:verbose_info  = 1
-		let s:verbose_debug = 2
-		let s:verbose_deep  = 3
-		let s:default_verbosity = s:verbose_quiet
-		let s:verbosity = s:default_verbosity
-	endif
+let s:default_result = [s:default_indent, s:default_tab_width]
+let s:nb_processed_lines = 0
 
-	let s:default_result = [s:default_indent, s:default_tab_width]
-	let s:nb_processed_lines = 0
+let s:NoIndent = "NoIndent"
+let s:SpaceOnly = "SpaceOnly"
+let s:TabOnly = "TabOnly"
+let s:Mixed = "Mixed"
+let s:BeginSpace = "BeginSpace"
+let s:indent_re = '\m^\(\s\+\)\(\S.\+\)$'
+let s:mixed_re = '\m^\(\t\)\+\( \+\)$'
 
-	let s:NoIndent = "NoIndent"
-	let s:SpaceOnly = "SpaceOnly"
-	let s:TabOnly = "TabOnly"
-	let s:Mixed = "Mixed"
-	let s:BeginSpace = "BeginSpace"
-	let s:indent_re = '\m^\(\s\+\)\(\S.\+\)$'
-	let s:mixed_re = '\m^\(\t\)\+\( \+\)$'
+function! YAIFA(...)
 
 	function! s:log(level, s)
 		if a:level <= s:verbosity
@@ -301,7 +303,7 @@ function! YAIFA(cmdln)
 	function! s:results()
 		call s:dbg( "Nb of scanned lines : " . s:nb_processed_lines)
 		call s:dbg( "Nb of indent hint : " . s:nb_indent_hint)
-		call s:dbg( "Collected data:")
+		"call s:dbg( "Collected data:")
 		for key in keys(s:lines)
 			if s:lines[key] > 0
 				call s:dbg( '    Key ' . key . ' => ' . s:lines[key])
@@ -362,13 +364,14 @@ function! YAIFA(cmdln)
 		"
 
 		let result = []
-		" Detect sapce indented file
+		" Detect space indented file
 		if max_line_space >= max_line_mixed && max_line_space > max_line_tab
 			let nb = 0
 			let indent_value = 0
 			for i in range(8,2,-1)
 				"execute 'let m = s:lines.space' . i . ' > floor(nb * 1.1)'
-				if s:lines[i] > floor(nb * 1.1)
+				"if s:lines[i] > floor(nb * 1.1)
+				if s:lines[i] * 10 > nb * 11
 					let indent_value = i
 					"execute 'let nb = s:lines.space' . i
 					let nb = s:lines[i]
@@ -391,8 +394,9 @@ function! YAIFA(cmdln)
 			let indent_value = 0
 			for i in range(-8,-2)
 				"execute 'let m = s:lines.mixed' . i . ' > floor(nb * 1.1)'
-				let m = s:lines[i] > floor(nb * 1.1)
-				if s:lines[i] > floor(nb * 1.1)
+				"let m = s:lines[i] > floor(nb * 1.1)
+				"if s:lines[i] > floor(nb * 1.1)
+				if s:lines[i] * 10 > nb * 11
 					let indent_value = -1 * i
 					"execute 'let nb = s:lines.mixed' . i
 					let nb = s:lines[i]
@@ -444,7 +448,7 @@ function! YAIFA(cmdln)
 		 " => set shiftwidth to space_indent
 		let s:ts = result[1][0]
 		let s:sw = result[1][1]
-		echom "s:sw: " . s:sw
+		"echom "s:sw: " . s:sw
 		if s:sw == "" && (s:ts - (2*(s:ts/2))) == 0 " l mod 2
 			let s:sw = s:ts/2
 		elseif s:sw == ""
@@ -453,16 +457,30 @@ function! YAIFA(cmdln)
 
 		let cmd = 'set sts=4 | set tabstop=' . s:ts . ' | set noexpandtab | set shiftwidth=' . s:sw
 	endif
-	if a:cmdln == 1
-		echom cmd
-	endif
 	execute cmd
 	let b:yaifa_set = 1
+	if a:0 > 0
+		if a:1 == 2
+			if result[0] == "space"
+				return "space" . result[1]
+			elseif result[0] == "tab"
+				return "tab"
+			else
+				return "mixed" . s:sw
+			endif
+		endif
+	else
+		echom cmd
+	endif
+endfunction
+
+function! YAIFAGetVar(var)
+	exec "return s:".a:var
 endfunction
 
 augroup YAIFA
 	au! YAIFA
-	au BufRead * call YAIFA(0)
+	au BufRead * call YAIFA(1)
 augroup End
 
-command YAIFA call YAIFA(1)
+command YAIFAMagic call YAIFA()

@@ -13,7 +13,7 @@
 " 3.- Mixed: A combination of tabs and space is used. e.g.: a tab stands for 8
 "     spaces, but each indentation level is 4 spaces.
 "
-" Use :YAIFAMagic to manually set the options for the current file.
+" Use :YAIFAMagic to manually set the indenting settings for the current file.
 "
 " You can set three options to customize the default values when the file's
 " indentation can't be determined:

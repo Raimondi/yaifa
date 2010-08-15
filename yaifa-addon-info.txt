@@ -1,0 +1,9 @@
+{
+  "name" : "yaifa",
+  "version" : "1.2",
+  "author" : "Israel Chauca F. <israelchauca@gmail.com>",
+  "maintainer" : "Israel Chauca F. <israelchauca@gmail.com>",
+  "repository" : {"type": "git", "url": "git://github.com/Raimondi/YAIFA.git"},
+  "dependencies" : {},
+  "description" : "Detect the kind of indentation used in your file and set Vim's options to keep it that way."
+}

@@ -38,20 +38,14 @@ else
 	let s:max_lines = 1024*2
 endif
 
-if exists('g:yaifa_indentation')
-	let s:default_indent = g:yaifa_indentation == 0 ? "tab" :
-				\ g:yaifa_indentation == 1 ? "space" :
-				\ g:yaifa_indentation == 2 ? "mixed" :
-				\ "space"
-else
+if &expandtab
 	let s:default_indent = 'space'
+	let s:default_tab_width = s:swset ? &sw : 2
+else
+	let s:default_indent = 'tab'
+	let s:default_tab_width = s:swset ? &sw : 4
 endif
 
-if exists('g:yaifa_tab_width')
-	let s:default_tab_width = g:yaifa_tab_width
-else
-	let s:default_tab_width = 4
-endif
 
 let s:verbose_quiet = 0
 let s:verbose_info  = 1

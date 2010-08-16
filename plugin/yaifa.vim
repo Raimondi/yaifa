@@ -1,5 +1,5 @@
 " YAIFA: Yet Another Indent Finder, Almost...
-" Version: 1.1
+" Version: 1.2
 " Modified: 2010-05-23
 " Author: Israel Chauca F. <israelchauca@gmail.com>
 "

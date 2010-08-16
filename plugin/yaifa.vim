@@ -15,23 +15,11 @@
 "
 " Use :YAIFAMagic to manually set the indenting settings for the current file.
 "
-" You can set three options to customize the default values when the file's
-" indentation can't be determined:
+" Depending on the system set-up and the file size scanning too many lines can
+" be painfully slow, so YAIFA processes 2048 lines by default, that value can
+" be changed with the following line in your .vimrc:
 "
-" - yaifa_max_lines       The max number of lines that will be scanned to
-"                         determine the file indentation.
-"
-"
-" - yaifa_tab_width       Default tab width to be used when the indentation
-"                         can't be determined.
-"
-"
-" - yaifa_indentation     Default kind of indentation, accepts the following
-"                         numeric values:
-"                         - 0: Space.
-"                         - 1: Tab.
-"                         - 2: Mixed.
-"
+"    let yaifa_max_lines = 4096
 "
 " This script is a port to VimL from Philippe Fremy's Python script Indent
 " Finder, hence the "Almost" part of the name.
@@ -47,7 +35,7 @@ let g:loaded_yaifa = 1
 if exists('g:yaifa_max_lines')
 	let s:max_lines = g:yaifa_max_lines
 else
-	let s:max_lines = 1024*16
+	let s:max_lines = 1024*2
 endif
 
 if exists('g:yaifa_indentation')

@@ -409,10 +409,10 @@ function! YAIFA(...)
 		call s:info('space')
 		"spaces:
 		" => set sts to the number of spaces
-		" => set tabstop to the number of spaces
+		" => set tabstop to 8
 		" => expand tabs to spaces
 		" => set shiftwidth to the number of spaces
-		let cmd = 'set sts=' . result[1] . ' | set tabstop=' . result[1] . ' | set expandtab | set shiftwidth=' . result[1]
+		let cmd = 'set sts=' . result[1] . ' | set tabstop=8 | set expandtab | set shiftwidth=' . result[1]
 	elseif result[0] == 'tab'
 		call s:info('tab')
 		"tab:
@@ -423,21 +423,22 @@ function! YAIFA(...)
 		let cmd = 'set sts=0 | set tabstop=' . s:default_tab_width . ' | set noexpandtab | set shiftwidth=' . s:default_tab_width
 	elseif result[0] == 'mixed'
 		call s:info('mixed')
-		 "tab:
-		 " => set sts to 0
-		 " => set tabstop to tab_indent
-		 " => set expandtab to false
-		 " => set shiftwidth to space_indent
+		"tab:
+		" => set sts to 0
+		" => set tabstop to tab_indent
+		" => set expandtab to false
+		" => set shiftwidth to space_indent
 		let s:ts = result[1][0]
 		let s:sw = result[1][1]
 		"echom "s:sw: " . s:sw
-		if s:sw == "" && (s:ts - (2*(s:ts/2))) == 0 " l mod 2
+		"if s:sw == "" && (s:ts - (2*(s:ts/2))) == 0 " l mod 2
+		if s:sw == "" && s:ts > 2
 			let s:sw = s:ts/2
 		elseif s:sw == ""
 			let s:sw = s:ts
 		endif
 
-		let cmd = 'set sts=4 | set tabstop=' . s:ts . ' | set noexpandtab | set shiftwidth=' . s:sw
+		let cmd = 'set sts=' . s:sw . ' | set tabstop=' . s:ts . ' | set noexpandtab | set shiftwidth=' . s:sw
 	endif
 	execute cmd
 	let b:yaifa_set = 1

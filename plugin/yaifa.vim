@@ -466,4 +466,4 @@ augroup YAIFA
 	au BufRead * call YAIFA(1)
 augroup End
 
-command YAIFAMagic call YAIFA()
+command -nargs=0 -bar YAIFAMagic call YAIFA()

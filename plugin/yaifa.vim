@@ -1,6 +1,6 @@
 " YAIFA: Yet Another Indent Finder, Almost...
-" Version: 1.2
-" Modified: 2010-05-23
+" Version: 1.3
+" Modified: 2010-08-17
 " Author: Israel Chauca F. <israelchauca@gmail.com>
 "
 " This plug-in will try to detect the kind of indentation in your file and set

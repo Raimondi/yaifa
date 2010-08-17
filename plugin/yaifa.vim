@@ -38,7 +38,7 @@ else
         let s:max_lines = 1024*2
 endif
 
-redir => redir | verbose set sw? | redir END
+redir => redir | silent verbose set sw? | redir END
 let s:swset = len(split(redir,"\n")) > 1
 
 if &expandtab

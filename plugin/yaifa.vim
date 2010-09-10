@@ -401,6 +401,9 @@ function! s:results()
 endfunction
 
 function! YAIFA(...)
+        if &buftype != ''
+                return ''
+        endif
 
         " The magic starts here
         call s:clear()

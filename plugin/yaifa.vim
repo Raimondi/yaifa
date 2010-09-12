@@ -401,10 +401,6 @@ function! s:results()
 endfunction
 
 function! YAIFA(...)
-        if &buftype != ''
-                return ''
-        endif
-
         " The magic starts here
         call s:clear()
         call s:parse_file()
@@ -469,7 +465,7 @@ endfunction
 
 augroup YAIFA
         au! YAIFA
-        au BufRead * call YAIFA(1)
+        au BufRead * if &buftype == '' | call YAIFA(1) | endif
 augroup End
 
 command -nargs=0 -bar YAIFAMagic call YAIFA()

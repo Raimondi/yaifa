@@ -28,5 +28,9 @@ indentation can't be determined:
                         - 1: Tab.
                         - 2: Mixed.
 
+- b:yaifa_disabled      Set this to 1 to disable YAIFA for this buffer.
+                        Can be used in an ftplugin to disable YAIFA for
+                        certain filetypes.
+
 This script is a port to VimL from Philippe Fremy's Python script Indent
 Finder, hence the "Almost" part of the name.

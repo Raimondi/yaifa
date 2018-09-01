@@ -401,6 +401,10 @@ function! s:results()
 endfunction
 
 function! YAIFA(...)
+        if get(b:, 'yaifa_disabled', 0) != 0
+                return
+        endif
+
         " The magic starts here
         call s:clear()
         call s:parse_file()

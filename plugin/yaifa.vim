@@ -1,6 +1,5 @@
 " YAIFA: Yet Another Indent Finder, Almost...
-" Version: 1.3
-" Modified: 2010-08-17
+" Version: 2.0
 " Author: Israel Chauca F. <israelchauca@gmail.com>
 "
 " This plug-in will try to detect the kind of indentation in your file and set
@@ -21,455 +20,438 @@
 "
 "    let yaifa_max_lines = 4096
 "
-" This script is a port to VimL from Philippe Fremy's Python script Indent
-" Finder, hence the "Almost" part of the name.
+" This script is base on Philippe Fremy's Python script Indent Finder, hence
+" the "Almost" part of the name.
 
 if exists('g:loaded_yaifa')
         finish
 endif
-
 let g:loaded_yaifa = 1
 
-" Depending on your system and file size, scanning too many lines can be
-" painfully slow.
-if exists('g:yaifa_max_lines')
-        let s:max_lines = g:yaifa_max_lines
-else
-        let s:max_lines = 1024*2
-endif
+let s:script_dir = expand('<sfile>:p:h:h')
 
-redir => redir | silent verbose set sw? | redir END
-let s:swset = len(split(redir,"\n")) > 1
+function! s:log(level, message) "{{{
+  if a:level <= get(g:, 'yaifa_debug', 0)
+    echomsg printf('yaifa[%s]: %s', a:level, a:message)
+  endif
+endfunction "}}}
 
-if &expandtab
-        let s:default_indent = 'space'
-        let s:default_tab_width = s:swset ? &sw : 2
-else
-        let s:default_indent = 'tab'
-        let s:default_tab_width = s:swset ? &sw : 4
-endif
+function! s:l2str(line) "{{{
+  if a:line.tab
+    let type = 'tab'
+  elseif a:line.space && a:line.mixed
+    let type = 'either'
+  elseif a:line.space
+    let type = 'space'
+  elseif a:line.mixed
+    let type = 'mixed'
+  elseif a:line.is_crazy
+    let type = 'crazy'
+  else
+    let type = 'empty'
+  endif
+  let line = substitute(a:line.line, '\m\t', '|-------', 'g')
+  let line = substitute(line, '\m ', nr2char(183), 'g')
+  return printf('[%s:%2s]%-5s:%s',
+        \ a:line.linenr, a:line.length, type, line)
+endfunction "}}}
 
+function! s:is_continued_line(previous, current, filetype) "{{{
+  if a:filetype ==? 'vim'
+    return a:current =~# '\m^\s*\\'
+  "elseif ...
+  " TODO: Consider other syntaxes for line continuation
+  " https://en.wikipedia.org/wiki/Comparison_of_programming_languages_(syntax)
+  else
+    return a:previous =~# '\m\\$'
+  endif
+endfunction "}}}
 
-let s:verbose_quiet = 0
-let s:verbose_info  = 1
-let s:verbose_debug = 2
-let s:verbose_deep  = 3
-if exists('g:yaifa_verbosity')
-        let s:verbosity = g:yaifa_verbosity
-else
-        let s:default_verbosity = s:verbose_quiet
-        let s:verbosity = s:default_verbosity
-endif
+function! s:is_comment(line, filetype) "{{{
+  if a:filetype ==# 'vim'
+    return a:line =~# '\m^\s*"'
+  "elseif ...
+  " TODO: Consider other syntaxes for comments
+  " https://en.wikipedia.org/wiki/Comparison_of_programming_languages_(syntax)
+  else
+    return a:line =~# '\m^\s*\%(/\*\|\*\|#\|//\)'
+  endif
+endfunction "}}}
 
-let s:default_result = [s:default_indent, s:default_tab_width]
-let s:nb_processed_lines = 0
+function! s:analyze_lines(lines, filetype, defaults) "{{{
+  let defaults = {'type': 'space', 'indent': 4, 'tabstop': 8,
+        \ 'max_lines': 1024}
+  call extend(defaults, a:defaults, 'force')
+  let previous = {'line': '', 'linenr': 0, 'indent': 'X', 'delta': '',
+          \ 'tab': 0, 'space': 0, 'mixed': 0, 'is_crazy': 0,
+          \ 'tabs': 0, 'spaces': 0, 'length': 0, 'skipped': 0}
+  let lines = map(copy(a:lines), 'extend(deepcopy(previous), '
+        \ . '{''line'': v:val, ''linenr'': v:key + 1, '
+        \ . '''indent'': matchstr(v:val, ''\m^\s*'')}, ''force'')')
+  let mixed = {}
+  let space = {}
+  let tab = 0
+  let processed_count = 0
+  let ignored_count = 0
+  let hint_count = 0
+  let max_lines = defaults.max_lines
+  while !empty(lines) && (processed_count -ignored_count) < max_lines
+    let processed_count += 1
+    let current = remove(lines, 0)
+    let skip_msg = ''
+    if s:is_continued_line(previous.line, current.line, a:filetype)
+      let skip_msg = 'line continuation'
+      " Use the properties of the "main" line since that's the one with the
+      " correct indentation.
+      let current_line = current.line
+      let current = copy(previous)
+      let current.line = current_line
+      let previous = current
+    elseif s:is_comment(current.line, a:filetype)
+      let skip_msg = 'comment'
+    endif
+    if !empty(skip_msg)
+      " This is meaningless line, just skip it.
+      3DebugYaifa s:l2str(current)
+      3DebugYaifa printf('Hint: none (%s)', skip_msg)
+      let ignored_count += 1
+      continue
+    endif
+    let current.length =
+          \ len(substitute(current.indent, '\t', repeat(' ', 8), 'g'))
+    " Determine indentation type.
+    if current.indent =~# '\m^ \+$'
+      let current.space = 1
+      let current.spaces = len(matchstr(current.indent, '\m^\zs *'))
+      if current.spaces < 8
+        " This line could also use mixed indentation.
+        let current.mixed = 1
+      endif
+    elseif current.indent =~# '\m^\t\+ \+$'
+      let current.mixed = 1
+      let current.spaces = len(matchstr(current.indent, '\m^\t*\zs *'))
+      let current.tabs = len(matchstr(current.indent, '\m^\t*'))
+    elseif current.indent =~# '\m^\t\+$'
+      let current.tab = 1
+      let current.tabs = len(matchstr(current.indent, '\m^\t*'))
+    elseif current.indent =~# '\m \t'
+      let current.is_crazy = 1
+    endif
+    3DebugYaifa s:l2str(current)
+    let current.delta = current.length - previous.length
+    if empty(current.line) || current.line =~# '\m^\s*$'
+      " Skip empty or blank lines
+      let current.skipped = 1
+      3DebugYaifa printf('Hint: none (%3s:empty line)', current.delta)
+    elseif previous.indent ==# current.indent
+      " Skip lines without indentation change
+      3DebugYaifa printf('Hint: none (%3s: same indent)', current.delta)
+    elseif current.is_crazy
+      " Skip lines with crazy indentation
+      let current.skipped = 1
+      3DebugYaifa printf('Hint: none (%3s:crazy indent)', current.delta)
+    elseif (current.mixed && current.spaces >= 8)
+      " Skip mixed lines with too many spaces, looks like crazy indentation
+      let current.skipped = 1
+      3DebugYaifa printf('Hint: none (%3s:mixed & wrong number of spaces)',
+            \ current.delta)
+    elseif previous.skipped
+      " Not enough context to analyze this line, just skip it.
+      3DebugYaifa printf('Hint: none (%3s:previous was skipped)',
+            \ current.delta)
+    elseif (previous.length == 0 || previous.tab) && current.tab
+      " Indent change hints at tabs
+      if previous.tabs == current.tabs - 1
+        " Increment tab count
+        let tab += 1
+        let hint_count += 1
+        3DebugYaifa printf('Hint: tab   (%3s)', current.delta)
+      else
+        " Ignore indent change too big
+        3DebugYaifa printf('Hint: none (%3s:tab & wrong number of tabs)',
+              \ current.delta)
+      endif
+    elseif (previous.length == 0 || previous.space) && current.space
+          \ && !current.mixed
+      " Indent change hints at spaces
+      if (1 < current.delta) && (current.delta <= 8)
+        " Increment space count
+        let space[current.delta] = get(space, current.delta, 0) + 1
+        let hint_count += 1
+        3DebugYaifa printf('Hint: space (%3s)', current.delta)
+      else
+        " Ignore indent change too big or too small
+        3DebugYaifa printf('Hint: none (%3s:space & wrong number of spaces)',
+              \ current.delta)
+      endif
+    elseif (previous.mixed && previous.space || previous.length == 0)
+          \ && current.space && current.mixed
+      " Indent change hints at spaces or mixed
+      if (1 < current.delta) && (current.delta <= 8)
+        " Increment space and mixed count
+        let space[current.delta] = get(space, current.delta, 0) + 1
+        let mixed[current.delta] = get(mixed, current.delta, 0) + 1
+        let hint_count += 1
+        3DebugYaifa printf('Hint: either(%3s)', current.delta)
+      else
+        " Ignore indent change too big or too small
+        3DebugYaifa printf('Hint: none (%3s:either & wrong number of spaces)',
+              \ current.delta)
+      endif
+    elseif previous.tab && current.mixed
+      " Indent change hints at mixed
+      if (previous.tabs == current.tabs) && (1 < current.delta)
+            \ && (current.delta <= 8)
+        " Increment mixed count
+        let mixed[current.delta] = get(mixed, current.delta, 0) + 1
+        let hint_count += 1
+        3DebugYaifa printf('Hint: mixed (%3s)', current.delta)
+      else
+        " Ignore indent change too big or too small
+        3DebugYaifa printf('Hint: none (%3s:mixed & wrong number of spaces)',
+              \ current.delta)
+      endif
+    elseif previous.mixed && current.tab
+      " Indent change hints at mixed
+      if (previous.tabs == current.tabs - 1) && (1 < current.delta)
+            \ && (current.delta <= 8)
+        " Increment mixed count
+        let mixed[current.delta] = get(mixed, current.delta, 0) + 1
+        let hint_count += 1
+        3DebugYaifa printf('Hint: mixed (%3s)', current.delta)
+      else
+        " Ignore indent change too big or too small
+        3DebugYaifa printf('Hint: none (%3s:mixed & wrong number of spaces)',
+              \ current.delta)
+      endif
+    elseif previous.mixed && current.mixed
+      " Indent change hints at mixed
+      if (previous.tabs == current.tabs) && (1 < current.delta)
+            \ && (current.delta <= 8)
+        " Increment mixed count
+        let mixed[current.delta] = get(mixed, current.delta, 0) + 1
+        let hint_count += 1
+        3DebugYaifa printf('Hint: mixed (%3s)', current.delta)
+      else
+        " Ignore indent change too big or too small
+        3DebugYaifa printf('Hint: none (%3s:mixed & wrong number of spaces)',
+              \ current.delta)
+      endif
+    else
+      " Nothing to do here
+      3DebugYaifa printf('Hint: none  (%3s)', current.delta)
+    endif
+    let previous = current
+  endwhile
+  let max_space = max(space)
+  let max_mixed = max(mixed)
+  let max_tab   = tab
+  let result = {'type': '', 'indent': 0}
+  if max_space * 1.1 >= max_mixed && max_space >= max_tab
+    " Go with spaces
+    let line_count = 0
+    let indent = 0
+    for i in range(8, 1, -1)
+      if get(space, i, 0) > floor(line_count * 1.1)
+        " Give preference to higher indentation
+        let indent = i
+        let line_count = space[i]
+      endif
+    endfor
+    if indent == 0
+      " No guess on size, return defaults
+      let result.type = defaults.type
+      let result.indent = defaults.indent
+    else
+      let result.type = 'space'
+      let result.indent = indent
+    endif
+  elseif max_mixed > max_tab
+    " Go with mixed
+    let line_count = 0
+    let indent = 0
+    for i in range(8, 1, -1)
+      if get(mixed, i, 0) > floor(line_count * 1.1)
+        " Give preference to higher indentation
+        let indent = i
+        let line_count = mixed[i]
+      endif
+    endfor
+    if indent == 0
+      " No guess on size, return defaults
+      let result.type = defaults.type
+      let result.indent = defaults.indent
+    else
+      let result.type = 'mixed'
+      let result.indent = indent
+    endif
+  else
+    " Go with tabs
+    let result.type = 'tab'
+    let result.indent = defaults.tabstop
+  endif
+  if get(g:, 'yaifa_debug', 0) > 1
+    " Print some info for debugging
+    2DebugYaifa printf('Processed lines count: %s', processed_count)
+    2DebugYaifa printf('Hints count: %s', hint_count)
+    if tab > 0
+      2DebugYaifa printf('    tab  (8) => %s', tab)
+    endif
+    for key in keys(space)
+      if space[key] > 0
+        2DebugYaifa printf('    space(%s) => %s', key, space[key])
+      endif
+    endfor
+    for key in keys(mixed)
+      if mixed[key] > 0
+        2DebugYaifa printf('    mixed(%s) => %s', key, mixed[key])
+      endif
+    endfor
+    2DebugYaifa  'max_space: ' . max_space
+    2DebugYaifa  'max_mixed: ' . max_mixed
+    2DebugYaifa  'max_tab: ' . max_tab
+  endif
+  1DebugYaifa 'Result: ' . string(result)
+  return result
+endfunction "}}}
 
-let s:NoIndent = "NoIndent"
-let s:SpaceOnly = "SpaceOnly"
-let s:TabOnly = "TabOnly"
-let s:Mixed = "Mixed"
-let s:BeginSpace = "BeginSpace"
-let s:indent_re = '\m^\(\s\+\)\(\S.\+\)$'
-let s:mixed_re = '\m^\(\t\)\+\( \+\)$'
+function! s:apply_settings(force) "{{{
+  " Is it a special buffer?
+  let is_special = !empty(&buftype)
+  " Do not try to guess in non-code buffers
+  let is_code = index(['help', 'text', 'mail'], &filetype) < 0
+  " Does the user wants it ignored?
+  let skip_it = get(b:, 'yaifa_disabled', get(g:, 'yaifa_disabled', 0))
+  if !a:force && (is_special || !is_code || skip_it)
+    " Seems like we are skipping this buffer
+    return
+  endif
+  let lines = getline(1, '$')
+  let default_shiftwidth =
+        \ get(b:, 'yaifa_shiftwidth', get(g:, 'yaifa_shiftwidth', 4))
+  let default_tabstop = get(b:, 'yaifa_tabstop', get(g:, 'yaifa_tabstop', 8))
+  let default_expandtab =
+        \ get(b:, 'yaifa_expandtab', get(g:, 'yaifa_expandtab', 1))
+  if default_expandtab
+    let default_type = 'space'
+  elseif !default_shiftwidth || default_shiftwidth == default_tabstop
+    let default_type = 'tab'
+  else
+    let default_type = 'mixed'
+  endif
+  let defaults = {}
+  let defaults.max_lines = 1024
+  let defaults.type = default_type
+  let defaults.indent = default_shiftwidth
+  let defaults.tabstop = default_tabstop
+  " Do the guess work
+  let result = s:analyze_lines(lines, &filetype, defaults)
+  if result.type ==# 'tab'
+    " Use tabs
+    let expandtab = 'noexpandtab'
+    let shiftwidth = 0
+    let softtabstop = 0
+    let tabstop = default_tabstop
+  elseif result.type ==# 'mixed'
+    " Use tabs and spaces
+    let expandtab = 'noexpandtab'
+    let shiftwidth = result.indent
+    let softtabstop = result.indent
+    let tabstop = 8
+  else
+    " Use spaces only
+    let expandtab = 'expandtab'
+    let shiftwidth = result.indent
+    let softtabstop = result.indent
+    let tabstop = 8
+  endif
+  let template = 'setlocal %s tabstop=%s shiftwidth=%s softtabstop=%s'
+  let set_cmd = printf(template, expandtab, tabstop, shiftwidth, softtabstop)
+  execute set_cmd
+  1DebugYaifa set_cmd
+  return set_cmd
+endfunction "}}}
 
-function! s:log(level, s)
-        if a:level <= s:verbosity
-                echomsg s:nb_processed_lines . ':' . a:s
-        endif
-endfunction
-
-function! s:info(s)
-        call s:log(s:verbose_info, 'info:' . a:s)
-endfunction
-
-function! s:dbg(s)
-        call s:log(s:verbose_debug, 'dbg:' . a:s)
-endfunction
-
-function! s:deepdbg(s)
-        call s:log(s:verbose_deep, 'deep:' . a:s)
-endfunction
-
-function! s:clear()
-        let s:lines = {}
-        for i in range(2,9)
-                let s:lines[i] = 0
-                let s:lines[-1 * i ] = 0
-        endfor
-        let s:lines.tab = 0
-
-        let s:nb_processed_lines = 0
-        let s:nb_indent_hint = 0
-        let s:skip_next_line = 0
-        let s:previous_line_info = []
-endfunction
-
-function! s:parse_file()
-        "let nb_lines = line('$') < s:max_lines ? line('$') : s:max_lines
-        let nb_lines = line('$')
-        let i = 1
-        "while i <= nb_lines
-        while i <= nb_lines && s:nb_processed_lines < s:max_lines
-                call s:analyse_line(getline(i))
-                let i += 1
-        endw
-endf
-
-function! s:analyse_line(line)
-        let line = substitute(a:line, '\m\n', '', '')
-        call s:deepdbg('analyse_line: ' . substitute(substitute(line, '\m\t', '\\t', 'g'), '\m ', '·','g'))
-        let s:nb_processed_lines += 1
-        let skip_current_line = s:skip_next_line
-        let s:skip_next_line = 0
-        if line =~ '\m\\$'
-                call s:deepdbg('analyse_line: Ignoring next line!')
-                let s:skip_next_line = 1
-        endif
-
-        if skip_current_line
-                call s:deepdbg('analyse_line: Ignoring next line!')
-                return
-        endif
-        let ret = s:analyse_line_indentation(line)
-        if ret
-                let s:nb_indent_hint += 1
-                call s:deepdbg('analyse_line: Result of line analysis: ' . ret)
-        endif
-        return ret
-endfunction
-
-function! s:analyse_line_type(line)
-        let mixed_mode = 0
-        let tab_part = ""
-        let space_part = ""
-
-        if a:line !~ '\m^$' && a:line !~ '\m^\s'
-                cal s:deepdbg('analyse_line_type: line is not empty and not indented: ')
-                return [s:NoIndent, '']
-        endif
-
-        if a:line !~ s:indent_re
-                cal s:deepdbg('analyse_line_type: line is not indented')
-                return []
+function! s:test() "{{{
+  let start_time = reltime()
+  let results = {}
+  let results.files = []
+  let testdirspat = s:script_dir . '/test/*'
+  let testdirs = glob(testdirspat, 0, 1)
+  call map(testdirs, 'fnamemodify(v:val, '':p:h'')')
+  call filter(testdirs, 'isdirectory(v:val)')
+  for dir in testdirs
+    let files = glob(dir . '/*', 0, 1)
+    echom printf('dir name: %s', fnamemodify(dir, ':t'))
+    " Directories with test files should be named <type>-<value>
+    let [type, value] = split(fnamemodify(dir, ':t'), '-')
+    for file in files
+      let lines = readfile(file)
+      let test_time = reltime()
+      let result = s:analyze_lines(lines, '', {})
+      let test_time = reltimefloat(reltime(test_time)) * 100
+      let test_time = floor(test_time) / 100.0
+      let test_path = printf('%s/%s', fnamemodify(dir, ':p:h:t'),
+            \ fnamemodify(file, ':p:t'))
+      let result.path = file
+      let result.error = 0
+      let result.exp_type = type
+      let result.exp_value = value
+      if result.type ==? type
+        if result.indent != value
+          let result.error = 2
+          echohl WarningMsg
+          echom printf('%ss:%s failed: wrong value, expected %s but got %s',
+                \ test_time, test_path, result.exp_value, result.indent)
+          echohl Normal
         else
-                let indent_part = substitute(a:line, s:indent_re, '\1', '')
-                let text_part = substitute(a:line, s:indent_re, '\2', '')
+          echom printf('%ss:%s passed: type %s and value %s',
+                \ test_time, test_path, result.type, result.indent)
         endif
-        call s:deepdbg('analyse_line_type: indent_part="' . substitute(substitute(substitute(indent_part, '\m\n', '\\n', 'g'), '\m\t', '\\t', 'g'), ' ', '·', 'g') . '"')
-
-        if text_part =~ '\m^\*'
-                " continuation of a C/C++ comment, unlikely to be indented correctly
-                return []
-        endif
-
-        if a:line =~ '\m^(/\*\|#)'
-                " python, C/C++ comment, might not be indented correctly
-                return []
-        endif
-
-        if indent_part =~ '\m\t' && indent_part =~ '\m '
-                "Mixed mode
-                "let mo = indent_part =~ s:mixed_re
-                if indent_part !~ s:mixed_re
-                        " Line is not composed of "\t\t\t   "
-                        return []
-                endif
-                let mixed_mode = 1
-                let tab_part = substitute(indent_part, s:mixed_re, '\1','')
-                let space_part = substitute(indent_part, s:mixed_re, '\2','')
-        endif
-
-        if mixed_mode
-                if len(space_part) >= 8
-                        "this is not mixed mode, this is garbage !
-                        return []
-                endif
-                return [s:Mixed, tab_part, space_part]
-        endif"
-
-        if indent_part =~ '\m\t'
-                return [s:TabOnly, indent_part]
-        endif
-
-        if indent_part =~ '\m '
-                if len(indent_part) < 8
-                        " this could be mixed mode too
-                        return [s:BeginSpace, indent_part]
-                else
-                        " this is really a line indented with spaces
-                        return [s:SpaceOnly, indent_part]
-                endif
-        endif
-        echoerr 'We should never get here!'
-endfunction
-
-function! s:analyse_line_indentation(line)
-        let previous_line_info = s:previous_line_info
-        let current_line_info = s:analyse_line_type(a:line)
-        let s:previous_line_info = current_line_info
-
-        if len(current_line_info) == 0 || len(previous_line_info) == 0
-                "call s:deepdbg('analyse_line_indentation: Not enough info to analyse line : ' . string(previous_line_info) . ':' . string(current_line_info))
-                return 0
-        endif
-
-        let t = [previous_line_info[0], current_line_info[0]]
-        call s:deepdbg('analyse_line_indentation: Indent analysis: ' . string(t))
-
-        if t == [s:TabOnly, s:TabOnly]
-                                \ || t == [s:NoIndent, s:TabOnly]
-                if len(current_line_info[1]) - len(previous_line_info[1]) == 1
-                        let s:lines['tab'] += 1
-                        return 'tab'
-                endif
-        elseif t == [s:SpaceOnly, s:SpaceOnly]
-                                \ || t == [s:BeginSpace, s:SpaceOnly]
-                                \ || t == [s:NoIndent, s:SpaceOnly]
-                let nb_space = len(current_line_info[1]) - len(previous_line_info[1])
-                if 1 < nb_space && nb_space <= 8
-                        "execute 'let key = "space' . nb_space . '"'
-                        let key = nb_space
-                        let s:lines[key] += 1
-                        return key
-                endif
-        elseif t == [s:BeginSpace, s:BeginSpace]
-                                \ || t == [s:NoIndent, s:BeginSpace]
-                let nb_space = len(current_line_info[1]) - len(previous_line_info[1])
-                if 1 < nb_space && nb_space <= 8
-                        "execute 'let key1 = "space' . nb_space . '"'
-                        "execute 'let key2 = "mixed' . nb_space . '"'
-                        let key1 = nb_space
-                        let key2 = -1 * nb_space
-                        let s:lines[key1] += 1
-                        let s:lines[key2] += 1
-                        return key1
-                endif
-        elseif t == [s:BeginSpace, s:TabOnly]
-                " We assume that mixed indentation used 8 chars tabs
-                if len(current_line_info[1]) == 1
-                        let nb_space = len(current_line_info[1]) - len(previous_line_info[1])
-                        if 1 < nb_space && nb_space <= 8
-                                "execute 'let key = "mixed' . nb_space . '"'
-                                let key = -1 * nb_space
-                                let s:lines[key] += 1
-                                return key
-                        endif
-                endif
-        elseif t == [s:TabOnly, s:Mixed]
-                let tab_part = current_line_info[1]
-                let space_part = current_line_info[2]
-                if len(previous_line_info[1]) == len(tab_part)
-                        let nb_space = len(space_part)
-                        if 1 < nb_space && nb_space <= 8
-                                "execute 'let key = "mixed' . nb_space . '"'
-                                let key = -1 * nb_space
-                                let s:lines[key] += 1
-                                return key
-                        endif
-                endif
-        elseif t == [s:Mixed, s:TabOnly]
-                let tab_part = previous_line_info[1]
-                let space_part = previous_line_info[2]
-                if len(tab_part) + 1 == len(current_line_info[1])
-                        let nb_space = 8 - len(space_part)
-                        if 1 < nb_space && nb_space <= 8
-                                "execute 'let key = "mixed' . nb_space . '"'
-                                let key = -1 * nb_space
-                                let s:lines[key] += 1
-                                return key
-                        endif
-                endif
-        endif
-        return 0
-endfunction
-
-function! s:results()
-        call s:dbg( "Nb of scanned lines : " . s:nb_processed_lines)
-        call s:dbg( "Nb of indent hint : " . s:nb_indent_hint)
-        "call s:dbg( "Collected data:")
-        for key in keys(s:lines)
-                if s:lines[key] > 0
-                        call s:dbg( '    Key ' . key . ' => ' . s:lines[key])
-                endif
-        endfor
-        let spaces = []
-        let mixed = []
-        for i in range(2,9)
-                "execute 'let spaces = add(spaces, s:lines.space' . i . ')'
-                let spaces = add(spaces, s:lines[i])
-                "execute 'let mixed = add(mixed, s:lines.mixed' . i . ')'
-                let mixed = add(mixed, s:lines[-1 * i])
-        endfor
-        let max_line_space = max(spaces)
-        let max_line_mixed = max(mixed)
-        let max_line_tab = s:lines.tab
-
-        call s:dbg( 'max_line_space: ' . max_line_space )
-        call s:dbg( 'max_line_mixed: ' . max_line_mixed )
-        call s:dbg( 'max_line_tab: ' . max_line_tab )
-
-
-        """ Result analysis
-        "
-        " 1. Space indented file
-        "    - lines indented with less than 8 space will fill mixed and space array
-        "    - lines indented with 8 space or more will fill only the space array
-        "    - almost no lines indented with tab
-        "
-        " => more lines with space than lines with mixed
-        " => more a lot more lines with space than tab
-        "
-        " 2. Tab indented file
-        "    - most lines will be tab only
-        "    - very few lines as mixed
-        "    - very few lines as space only
-        "
-        " => a lot more lines with tab than lines with mixed
-        " => a lot more lines with tab than lines with space
-        "
-        " 3. Mixed tab/space indented file
-        "    - some lines are tab-only (lines with exactly 8 step indentation)
-        "    - some lines are space only (less than 8 space)
-        "    - all other lines are mixed
-        "
-        " If mixed is tab + 2 space indentation:
-        "     - a lot more lines with mixed than with tab
-        " If mixed is tab + 4 space indentation
-        "     - as many lines with mixed than with tab
-        "
-        " If no lines exceed 8 space, there will be only lines with space
-        " and tab but no lines with mixed. Impossible to detect mixed indentation
-        " in this case, the file looks like it's actually indented as space only
-        " and will be detected so.
-        "
-        " => same or more lines with mixed than lines with tab only
-        " => same or more lines with mixed than lines with space only
-        "
-
-        let result = []
-        " Detect space indented file
-        if max_line_space >= max_line_mixed && max_line_space > max_line_tab
-                let nb = 0
-                let indent_value = 0
-                for i in range(8,2,-1)
-                        "execute 'let m = s:lines.space' . i . ' > floor(nb * 1.1)'
-                        "if s:lines[i] > floor(nb * 1.1)
-                        if s:lines[i] * 10 > nb * 11
-                                let indent_value = i
-                                "execute 'let nb = s:lines.space' . i
-                                let nb = s:lines[i]
-                        endif
-                endfor
-
-                if indent_value == 0
-                        let result = s:default_result
-                else
-                        let result = ['space', indent_value]
-                endif
-
-        " Detect tab files
-        elseif max_line_tab > max_line_mixed && max_line_tab > max_line_space
-                let result = ['tab', s:default_tab_width]
-
-        " Detect mixed files
-        elseif max_line_mixed >= max_line_tab && max_line_mixed > max_line_space
-                let nb = 0
-                let indent_value = 0
-                for i in range(-8,-2)
-                        "execute 'let m = s:lines.mixed' . i . ' > floor(nb * 1.1)'
-                        "let m = s:lines[i] > floor(nb * 1.1)
-                        "if s:lines[i] > floor(nb * 1.1)
-                        if s:lines[i] * 10 > nb * 11
-                                let indent_value = -1 * i
-                                "execute 'let nb = s:lines.mixed' . i
-                                let nb = s:lines[i]
-                        endif
-                endfor
-
-                if indent_value == 0
-                        let result = s:default_result
-                else
-                        let result = ['mixed', [8, indent_value]]
-                endif
-
-        " Not enough information to make a decision
-        else
-                let result = s:default_result
-        endif
-        call s:info('Result: ' . string(result))
-        return result
-endfunction
-
-function! YAIFA(...)
-        if get(b:, 'yaifa_disabled', 0) != 0
-                return
-        endif
-
-        " The magic starts here
-        call s:clear()
-        call s:parse_file()
-
-        let result = s:results()
-
-        if result[0] == 'space'
-                call s:info('space')
-                "spaces:
-                " => set sts to the number of spaces
-                " => set tabstop to 8
-                " => expand tabs to spaces
-                " => set shiftwidth to the number of spaces
-                let cmd = 'set sts=' . result[1] . ' | set tabstop=8 | set expandtab | set shiftwidth=' . result[1]
-        elseif result[0] == 'tab'
-                call s:info('tab')
-                "tab:
-                " => set sts to 0
-                " => set tabstop to preferred value
-                " => set expandtab to false
-                " => set shiftwidth to tabstop
-                let cmd = 'set sts=0 | set tabstop=' . s:default_tab_width . ' | set noexpandtab | set shiftwidth=' . s:default_tab_width
-        elseif result[0] == 'mixed'
-                call s:info('mixed')
-                "tab:
-                " => set sts to 0
-                " => set tabstop to tab_indent
-                " => set expandtab to false
-                " => set shiftwidth to space_indent
-                let s:ts = result[1][0]
-                let s:sw = result[1][1]
-                "echom "s:sw: " . s:sw
-                "if s:sw == "" && (s:ts - (2*(s:ts/2))) == 0 " l mod 2
-                if s:sw == "" && s:ts > 2
-                        let s:sw = s:ts/2
-                elseif s:sw == ""
-                        let s:sw = s:ts
-                endif
-
-                let cmd = 'set sts=' . s:sw . ' | set tabstop=' . s:ts . ' | set noexpandtab | set shiftwidth=' . s:sw
-        endif
-        execute cmd
-        let b:yaifa_set = 1
-        if a:0 > 0
-                if a:1 == 2
-                        if result[0] == "space"
-                                return "space" . result[1]
-                        elseif result[0] == "tab"
-                                return "tab"
-                        else
-                                return "mixed" . s:sw
-                        endif
-                endif
-        else
-                echom cmd
-        endif
-endfunction
-
-function! YAIFAGetVar(var)
-        exec "return s:".a:var
-endfunction
+      else
+        echohl WarningMsg
+        echom printf('"%s" failed: wrong type, expected %s but got %s',
+              \ test_time, test_path, result.exp_type, result.type)
+        echohl Normal
+        let result.error = 1
+      endif
+      call add(results.files, result)
+    endfor
+  endfor
+  echom ' '
+  echom printf('Elapsed time: %s seconds',
+        \ floor(reltimefloat(reltime(start_time))))
+  for file in results.files
+    let file.path = fnamemodify(file.path, ':~:.')
+  endfor
+  let results.passed_files = filter(copy(results.files), '!v:val.error')
+  let results.failed_files = filter(copy(results.files), 'v:val.error')
+  let results.failed_types = filter(copy(results.files), 'v:val.error == 1')
+  let results.failed_values = filter(copy(results.files), 'v:val.error == 2')
+  if empty(results.failed_files)
+    echom 'All tests passed'
+  else
+    echohl WarningMsg
+    echom 'Failed tests:'
+    echohl Normal
+  endif
+  for file in results.failed_files
+    echom printf('%s: exp: %s-%s, act: %s-%s', file.path, file.exp_type,
+          \ file.exp_value, file.type, file.indent)
+  endfor
+  let g:yaifa_test_result = results
+  return results
+endfunction "}}}
 
 augroup YAIFA
-        au! YAIFA
-        au BufRead * if &buftype == '' | call YAIFA(1) | endif
+  au!
+  au BufReadPost,StdinReadPost * call s:apply_settings(0)
 augroup End
 
-command -nargs=0 -bar YAIFAMagic call YAIFA()
+command! -nargs=0 -bar -bang Yaifa call s:apply_settings(<bang>0)
+command! -bar TestYaifa call s:test()
+if get(g:, 'yaifa_debug', 0)
+  command! -count=1 -nargs=* DebugYaifa call s:log(<count>, <args>)
+else
+  command! -count=1 -nargs=* DebugYaifa :
+endif

@@ -28,7 +28,8 @@ License: MIT
  1. INTRODUCTION                                                  *yaifa-intro*
 
 This plug-in will try to detect the kind of indentation in your file and set
-options to keep it that way. It recognizes three types of indentation:
+the indenting options to the appropiate values. It recognizes three types of
+indentation:
 
 1.- Space: Only spaces are used to indent.
 

@@ -1,16 +1,16 @@
-*yaifa.txt*	Automagically detect and set indentation settings.
+*yaifa.txt*	Automagically detect file indentation. v2.0
 
 
                  =====================================~
-                 ====  ====  ============    =========
-                 ====   ==   ===========  ==  ========
-                 =====  ==  ============  ============~
-                 =====  ==  ==   ===  =    ==   ======~
-                 ======    ==  =  ======  ==  =  =====
-                 =======  ======  ==  ==  =====  =====
-                 =======  ====    ==  ==  ===    =====
-                 =======  ===  =  ==  ==  ==  =  =====~
-                 =======  ====    ==  ==  ===    =====~
+                =====  ====  ============    ==========
+               ======   ==   ===========  ==  ==========
+              ========  ==  ============  ===============~
+             =========  ==  ==   ===  =    ==   ==========~
+            ===========    ==  =  ======  ==  =  ==========
+             ===========  ======  ==  ==  =====  =========
+              ==========  ====    ==  ==  ===    ========
+               =========  ===  =  ==  ==  ==  =  =======~
+                ========  ====    ==  ==  ===    ======~
                  =====================================~
 
 
@@ -27,15 +27,13 @@ License: MIT
 ==============================================================================
  1. INTRODUCTION                                                  *yaifa-intro*
 
-This plug-in will try to detect the kind of indentation in your file and set
-the indenting options to the appropiate values. It recognizes three types of
-indentation:
+This plug-in will try to detect the kind of indentation used in your file and
+set the indenting options to the appropriate values. It recognizes the
+following types of indentation:
 
-1.- Space: Only spaces are used to indent.
-
-2.- Tab: Only tabs are used.
-
-3.- Mixed: A combination of tabs and space is used. e.g.: a tab stands for 8
+1. Space: Only spaces are used to indent.
+2. Tab: Only tabs are used.
+3. Mixed: A combination of tabs and space is used. e.g.: a tab stands for 8
     spaces, but each indentation level is 4 spaces.
 
 In order to guess the indentation of the buffer, it looks for increments in
@@ -43,11 +41,13 @@ the indentation level and into the involved lines to see the type of
 indentation and the number of spaces of the change.  The type of indentation
 with the most lines is used to set the options.
 
-If YAIFA ever guesses wrong indentation, send me immediately a mail, if
+If Yaifa ever guesses wrong indentation, send me immediately a mail, if
 possible with the offending file, or open an issue on GitHub.
 
-This script is based on Philippe Fremy's Python script Indent Finder, hence
+This script is based on Philippe Fremy's Python script Indent Finder(1), hence
 the "Almost" part of the name.
+
+1. http://www.freehackers.org/Indent_Finder
 
 ==============================================================================
  2. CONFIGURATION					   *yaifa-configuration*
@@ -134,5 +134,11 @@ Detect the indentation of the current buffer and set the corresponding
 options. This command ignores special buffers, use the bang to force it to
 work on them.
 
+==============================================================================
+                                            .--. ~
+                                      (\_/)/  _ \ ~
+                        __QQ          (o.o) _(   |____ ~
+                       (_)_">        .- ".-`----'`"""") ~
+                       _)      jgs                '--` ~
 ==============================================================================
  vim:noet:sw=4:sts=4:tw=78:ts=8:ft=help:norl:

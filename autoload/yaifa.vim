@@ -1,4 +1,4 @@
-" YAIFA: Yet Another Indent Finder, Almost...
+" Yaifa: Yet another indent finder, almost...
 " Version: 2.0
 " Author: Israel Chauca F. <israelchauca@gmail.com>
 
@@ -322,7 +322,6 @@ function! yaifa#magic(force, bufnr) "{{{
           \ . ' | unlet! b:indent_options_set'
   endif
   1DebugYaifa set_cmd
-  echo 1
   return set_cmd
 endfunction "}}}
 

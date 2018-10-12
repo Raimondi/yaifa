@@ -1,4 +1,4 @@
-" YAIFA: Yet Another Indent Finder, Almost...
+" Yaifa: Yet another indent finder, almost...
 " Version: 2.0
 " Author: Israel Chauca F. <israelchauca@gmail.com>
 
@@ -22,7 +22,7 @@ function! s:apply_settings(force, bufnr) "{{{
   endif
 endfunction "}}}
 
-augroup YAIFA
+augroup Yaifa
   au!
   au FileType * call s:apply_settings(0, bufnr('%'))
 augroup End

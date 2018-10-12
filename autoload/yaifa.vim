@@ -364,7 +364,7 @@ function! yaifa#test() "{{{
   endfor
   echom ' '
   echom printf('Elapsed time: %s seconds',
-        \ floor(reltimefloat(reltime(start_time))))
+        \ reltimestr(reltime(start_time)))
   for file in results.files
     let file.path = fnamemodify(file.path, ':~:.')
   endfor

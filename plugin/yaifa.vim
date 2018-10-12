@@ -14,11 +14,21 @@ function! s:log(level, message) "{{{
 endfunction "}}}
 
 function! s:apply_settings(force, bufnr) "{{{
+  " Is it a special buffer?
+  let is_special = !empty(&buftype)
+  " Do not try to guess in non-code buffers
+  let is_code = index(['help', 'text', 'mail'], &filetype) < 0
+  " Does the user wants it ignored?
+  let skip_it = get(b:, 'yaifa_disabled', get(g:, 'yaifa_disabled', 0))
+  if !a:force && (is_special || !is_code || skip_it)
+    " Seems like we are skipping this buffer
+    return
+  endif
   if !has('job')
     " We can be a bit slow on big files, this should mask it.
-    call job_start(yaifa#magic(a:force, a:bufnr))
+    call job_start(yaifa#magic(a:bufnr))
   else
-    call yaifa#magic(a:force, a:bufnr)
+    call yaifa#magic(a:bufnr)
   endif
 endfunction "}}}
 

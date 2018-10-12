@@ -261,17 +261,7 @@ function! yaifa#analyze_lines(lines, filetype, defaults) "{{{
   return result
 endfunction "}}}
 
-function! yaifa#magic(force, bufnr) "{{{
-  " Is it a special buffer?
-  let is_special = !empty(&buftype)
-  " Do not try to guess in non-code buffers
-  let is_code = index(['help', 'text', 'mail'], &filetype) < 0
-  " Does the user wants it ignored?
-  let skip_it = get(b:, 'yaifa_disabled', get(g:, 'yaifa_disabled', 0))
-  if !a:force && (is_special || !is_code || skip_it)
-    " Seems like we are skipping this buffer
-    return
-  endif
+function! yaifa#magic(bufnr) "{{{
   let lines = getline(1, '$')
   let default_shiftwidth =
         \ get(b:, 'yaifa_shiftwidth', get(g:, 'yaifa_shiftwidth', 4))

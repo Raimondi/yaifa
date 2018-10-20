@@ -24,7 +24,7 @@ function! s:apply_settings(force, bufnr) "{{{
     " Seems like we are skipping this buffer
     return
   endif
-  if !has('job')
+  if has('job')
     " We can be a bit slow on big files, this should mask it.
     call job_start(yaifa#magic(a:bufnr))
   else

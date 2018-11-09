@@ -1,5 +1,5 @@
 " Yaifa: Yet another indent finder, almost...
-" Version: 2.0
+" Version: 2.1
 " Author: Israel Chauca F. <israelchauca@gmail.com>
 
 if exists('g:loaded_yaifa_auto') && !get(g:, 'yaifa_debug', 0)

@@ -1,4 +1,4 @@
-*yaifa.txt*	Automagically detect file indentation. v2.0
+*yaifa.txt*	Automagically detect file indentation. v2.1
 
 
                  =====================================~

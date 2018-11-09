@@ -1,5 +1,5 @@
 " Yaifa: Yet another indent finder, almost...
-" Version: 2.0
+" Version: 2.1
 " Author: Israel Chauca F. <israelchauca@gmail.com>
 
 if exists('g:loaded_yaifa') && !get(g:, 'yaifa_debug', 0)
@@ -14,19 +14,21 @@ function! s:log(level, message) "{{{
 endfunction "}}}
 
 function! s:apply_settings(force, bufnr) "{{{
-  " Is it a special buffer?
-  let is_special = !empty(&buftype)
-  " Do not try to guess in non-code buffers
-  let is_code = index(['help', 'text', 'mail'], &filetype) < 0
   " Does the user wants it ignored?
   let skip_it = get(b:, 'yaifa_disabled', get(g:, 'yaifa_disabled', 0))
-  if !a:force && (is_special || !is_code || skip_it)
+  if !a:force && skip_it
     " Seems like we are skipping this buffer
     return
   endif
   if has('job')
     " We can be a bit slow on big files, this should mask it.
-    call job_start(yaifa#magic(a:bufnr))
+    if has('nvim')
+      " Neovim
+      call jobstart(yaifa#magic(a:bufnr))
+    else
+      " Vim
+      call job_start(yaifa#magic(a:bufnr))
+    endif
   else
     call yaifa#magic(a:bufnr)
   endif
@@ -34,7 +36,7 @@ endfunction "}}}
 
 augroup Yaifa
   au!
-  au FileType * call s:apply_settings(0, bufnr('%'))
+  au BufReadPost * call s:apply_settings(0, bufnr('%'))
 augroup End
 
 command! -nargs=0 -bar -bang Yaifa call s:apply_settings(<bang>0, bufnr('%'))

@@ -288,8 +288,11 @@ function! yaifa#magic(bufnr) "{{{
       call setbufvar(a:bufnr, printf('&%s', option), get(l:, option))
     endfor
     let b:indent_options_set = 1
-    let b:undo_ftplugin = get(b:, 'undo_ftplugin', '')
-          \ . ' | unlet! b:indent_options_set'
+    if !exists('b:undo_ftplugin') || b:undo_ftplugin =~# '\m^[ \t:]*$'
+      let b:undo_ftplugin = 'unlet! b:indent_options_set'
+    else
+      let b:undo_ftplugin .= ' | unlet! b:indent_options_set'
+    endif
   endif
   1DebugYaifa set_cmd
   return set_cmd

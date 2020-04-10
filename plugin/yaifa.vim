@@ -42,6 +42,26 @@ augroup End
 command! -nargs=0 -bar -bang Yaifa call s:apply_settings(<bang>0, bufnr('%'))
 command! -bar TestYaifa call yaifa#test()
 if get(g:, 'yaifa_debug', 0)
+  function! s:l2str(line) "{{{
+    if a:line.tab
+      let type = 'tab'
+    elseif a:line.space && a:line.mixed
+      let type = 'either'
+    elseif a:line.space
+      let type = 'space'
+    elseif a:line.mixed
+      let type = 'mixed'
+    elseif a:line.crazy
+      let type = 'crazy'
+    else
+      let type = 'empty'
+    endif
+    let line = substitute(a:line.line, '\m\t', '|-------', 'g')
+    let line = substitute(line, '\m ', nr2char(183), 'g')
+    return printf('[%s:%2s]%-5s:%s',
+          \ a:line.linenr, a:line.length, type, line)
+  endfunction "}}}
+
   command! -count=1 -nargs=* DebugYaifa call s:log(<count>, <args>)
 else
   command! -count=1 -nargs=* DebugYaifa :
